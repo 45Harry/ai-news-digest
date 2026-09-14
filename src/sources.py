@@ -55,12 +55,29 @@ def _fetch_one(url: str, category: str, source_override: str = "") -> List[Dict]
         elif getattr(entry, "updated_parsed", None):
             published_ts = time.mktime(entry.updated_parsed)
 
+        # Actual outlet, not the feed title. Google News feeds have the search
+        # query as their feed title, but each item carries the real publisher
+        # in entry.source.title (e.g. "WSJ") -- use that so emails show a clean
+        # source instead of "... OR congress OR law - Google News".
+        entry_source = ""
+        if getattr(entry, "source", None) and getattr(entry.source, "title", None):
+            entry_source = entry.source.title.strip()
+        item_source = source_override or entry_source or source_name
+
+        title = _clean_text(entry.get("title", "(untitled)"))
+        if entry_source and not source_override:
+            for sep in (" - ", " \u2013 ", " | "):
+                suffix = sep + entry_source
+                if title.endswith(suffix):
+                    title = title[: -len(suffix)].strip()
+                    break
+
         articles.append(
             {
-                "title": _clean_text(entry.get("title", "(untitled)")),
+                "title": title,
                 "link": entry.get("link", "").strip(),
                 "summary": _clean_text(entry.get("summary", "")),
-                "source": source_name,
+                "source": item_source,
                 "category": category,
                 "published_ts": published_ts,
             }
