@@ -6,6 +6,8 @@ final email is exactly what the publisher wrote. Twitter accounts are fetched
 concurrently via RSSHub (or any template you point TWITTER_RSS_TEMPLATE at).
 """
 
+import html
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List
@@ -23,6 +25,15 @@ from src.config import (
 )
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ai-news-digest/1.0; personal use bot)"}
+
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _clean_text(text: str) -> str:
+    """Strip tags/entities so raw HTML never shows up in the email body."""
+    text = _TAG_RE.sub(" ", text or "")
+    text = html.unescape(text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _fetch_one(url: str, category: str, source_override: str = "") -> List[Dict]:
@@ -46,9 +57,9 @@ def _fetch_one(url: str, category: str, source_override: str = "") -> List[Dict]
 
         articles.append(
             {
-                "title": entry.get("title", "(untitled)").strip(),
+                "title": _clean_text(entry.get("title", "(untitled)")),
                 "link": entry.get("link", "").strip(),
-                "summary": (entry.get("summary", "") or "").strip(),
+                "summary": _clean_text(entry.get("summary", "")),
                 "source": source_name,
                 "category": category,
                 "published_ts": published_ts,

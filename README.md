@@ -8,25 +8,39 @@ AI/product news plus AI policy & political news -- since the last time it ran.
 
 ```
               -> fetch_general ->\
-START ->                            >-> merge -> prioritize -> send_breaking ->\
-              -> fetch_policy  ->/                       |                       -> summarize -> send_digest -> END
-              -> fetch_tweets  ->/    -> END (nothing new)  -> END (no hot news)   / -> END (no regular news)
-              -> fetch_labs    ->/
+START ->                            >-> merge -> prioritize -> verify -> send_breaking ->\
+              -> fetch_policy  ->/                                                  |       -> summarize -> send_digest -> END
+              -> fetch_tweets  ->/           -> END (nothing new)                   |      /  -> END (no regular news)
+              -> fetch_labs    ->/                                    -> END (no hot news)
 ```
 
 - **fetch_general / fetch_policy / fetch_tweets / fetch_labs** (in parallel) pull
   raw items from RSS feeds -- general AI news, policy/politics, AI lab tweets,
   and official lab blogs + announcement searches. See `src/config.py` for the
   lists.
-- **merge** de-dupes, drops anything already emailed before (tracked in
-  `data/seen.json`), and caps volume per run.
+- **merge** de-dupes exact duplicates, drops anything already emailed before
+  (tracked in `data/seen.json`), and caps volume per run.
 - **prioritize** flags **big / unique** stories (regulation, court cases, model
   launches, funding rounds, the same story covered by multiple outlets, ...).
+- **verify** (LLM) guards what gets mailed, twice:
+  1. it merges *near-duplicate* coverage of the same story -- same story on
+     several feeds is emailed once, the hottest version wins -- and drops junk
+     (off-topic, spam, placeholders). It never rewrites a headline/link/source;
+     it only decides which original feed items survive. If the model can't
+     answer, everything passes through.
+  2. after the overview is generated, the verify model **fact-checks** it
+     against the source headlines (no invented facts/numbers) and confirms the
+     format check passed (no HTML/markdown/code).
   Hot stories are emailed **immediately as a BREAKING alert** -- real time.
-- **summarize** asks an LLM for a short 3-5 sentence "here's what's notable"
-  overview. This is the *only* place a model touches the content -- every
-  headline, link, and source in the email is taken straight from the feed
-  and can never be garbled by the model.
+- **summarize** asks the generate model for a structured overview (headline +
+  3-5 sentence summary + top themes) as JSON with a *fixed schema*. The verify
+  model then validates it (format + hallucination check); anything unclean is
+  **regenerated** (up to 3 tries) and only a clean answer is emailed -- if none
+  arrives, a fixed plain-text notice goes out. Because the output schema and
+  email template are fixed, the email renders **identically no matter which
+  LLM/provider wrote it** (gemini, ollama, openai, ...). Every headline, link,
+  and source in the email is still taken straight from the feed and can never
+  be garbled by the model.
 - **send** emails the digest via Gmail SMTP and records the sent links so they
   won't be repeated next run.
 - If nothing new was found, the graph skips straight to END -- no wasted LLM
@@ -46,6 +60,27 @@ If a provider throws an error (bad key, quota, outage), it's logged and the
 next provider is tried automatically -- the email always goes out. Enabled
 providers with a key in `.env` are picked up automatically; add whichever
 keys you have and drop the rest.
+
+### One model per task
+
+Each LLM task has its **own** chain, so you can pair the right model to the job:
+
+```
+VERIFY_LLM_PROVIDERS=ollama,gemini    # verify/dedup task -- cheap & fast
+OVERVIEW_LLM_PROVIDERS=gemini,ollama  # summary task -- your best writer
+```
+
+Tasks with `name@model` syntax can pin a specific model of a provider (e.g.
+`ollama@llama3.2`). A task left set to a provider that's down still falls back
+within *its own* list. The tasks:
+
+- **verify** (`VERIFY_LLM_PROVIDERS`) -- merges near-duplicate stories and
+  drops junk. Suggestion: a small/cheap local model.
+- **overview** (`OVERVIEW_LLM_PROVIDERS`) -- writes the structured headline +
+  summary + themes. Suggestion: your strongest writing model.
+
+If a task's whole chain fails, that task falls back to a fixed default (no
+email is ever blocked). `run.py --check-llm` prints each task's assignment.
 
 ## Project layout
 

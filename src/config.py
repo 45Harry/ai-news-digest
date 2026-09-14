@@ -5,6 +5,7 @@ pulled from environment variables / a local .env file (see .env.example).
 """
 
 import os
+from typing import List
 from urllib.parse import quote
 
 # ---------------------------------------------------------------------------
@@ -19,6 +20,21 @@ LLM_PROVIDERS = os.getenv("LLM_PROVIDERS", DEFAULT_PROVIDER_CHAIN)
 PROVIDER_CHAIN = [p.strip().lower() for p in LLM_PROVIDERS.split(",") if p.strip()]
 if LLM_PROVIDER:
     PROVIDER_CHAIN = [LLM_PROVIDER]
+
+
+def _task_chain(env_name: str, default_chain: List[str]) -> List[str]:
+    """Per-task provider/model list. Entries may be `provider` or `provider@model`."""
+    value = (os.getenv(env_name) or "").strip()
+    if not value:
+        return list(default_chain)
+    return [p.strip().lower() for p in value.split(",") if p.strip()]
+
+
+# Each LLM task runs its OWN chain so you can assign a different model to it
+# (e.g. a small cheap model for verify/dedup, a frontier model for the summary).
+# Entries accept the `name@model` form to pick a specific model of a provider.
+LLM_VERIFY_PROVIDERS = _task_chain("VERIFY_LLM_PROVIDERS", PROVIDER_CHAIN)
+LLM_OVERVIEW_PROVIDERS = _task_chain("OVERVIEW_LLM_PROVIDERS", PROVIDER_CHAIN)
 
 # Ollama -- usually local (http://localhost:11434). Set OLLAMA_API_KEY only if
 # your Ollama instance requires auth (e.g. a remote box).

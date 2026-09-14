@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from src.config import PROVIDER_CHAIN  # noqa: E402  (loaded after dotenv so config sees .env)
+from src.config import LLM_OVERVIEW_PROVIDERS, PROVIDER_CHAIN, LLM_VERIFY_PROVIDERS  # noqa: E402
 from src.graph import build_graph  # noqa: E402
 from src.mailer import send_test_email  # noqa: E402
 from src.providers import check_providers  # noqa: E402
@@ -65,6 +65,8 @@ def run_once() -> dict:
 
 def check_llm() -> None:
     print(f"[main] provider chain: {', '.join(PROVIDER_CHAIN)}")
+    print(f"[main]   verify   task -> {' ,'.join(LLM_VERIFY_PROVIDERS)}")
+    print(f"[main]   overview task -> {' ,'.join(LLM_OVERVIEW_PROVIDERS)}")
     results = check_providers()
     if not results:
         print("[main] no providers configured - add keys to .env or start Ollama, then re-run.")

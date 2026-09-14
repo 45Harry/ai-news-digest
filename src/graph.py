@@ -1,20 +1,22 @@
 """The multi-agent graph.
 
     START --> fetch_general --+
-                              |                     +--> summarize --> send_digest --> END
-    START --> fetch_policy  --+--> merge --> prioritize --> send_breaking --+
-    START --> fetch_tweets --+                              |
-                                                      (nothing new --> END)
-                                                      (no hot --> skip breaking)
-                                                      (no regular news --> END)
+                              |                                      +--> summarize --> send_digest --> END
+    START --> fetch_policy  --+--> merge --> prioritize --> verify --> send_breaking --+
+    START --> fetch_tweets --+                              |                |
+    START --> fetch_labs   --+                    (nothing new --> END)      (no hot --> skip breaking)
+                                                                             (no regular news --> END)
 
 Each node is a small, single-purpose agent. fetch_general/fetch_policy/
-fetch_tweets run in parallel; merge fans them back in, drops duplicates and
-anything already emailed before (via SeenStore); prioritize flags big/unique
-stories; and:
+fetch_tweets/fetch_labs run in parallel; merge fans them back in, drops exact
+duplicates and anything already emailed before (via SeenStore); prioritize
+scores every story; **verify** is the LLM verification pass that merges
+near-duplicate coverage of the same story (keeping the hottest version) and
+drops junk before anything is emailed; and:
 
 - hot stories are emailed **immediately** as a BREAKING alert (real time),
-- any remaining new stories go into the regular digest with an LLM overview.
+- any remaining new stories go into the regular digest with a structured,
+  identically-rendered LLM overview (the template never varies by provider).
 
 If nothing new was found, the graph short-circuits to END -- no LLM call, no
 email.
@@ -27,9 +29,11 @@ from langgraph.graph import END, START, StateGraph
 from src.config import MAX_ARTICLES_PER_RUN
 from src.mailer import send_breaking_email, send_digest_email
 from src.priority import annotate, split_hot
-from src.providers import summarize_digest
+from src.providers import dedupe_news, summarize_digest
 from src.seen_store import SeenStore
 from src.sources import fetch_general_news, fetch_lab_news, fetch_policy_news, fetch_tweets
+
+_CATEGORIES = ("general", "policy", "tweets", "labs")
 
 
 class DigestState(TypedDict):
@@ -103,29 +107,30 @@ def node_prioritize(state: DigestState) -> DigestUpdate:
         state["new_general"] + state["new_policy"] + state["new_tweets"] + state["new_labs"]
     )
     by_link = {a["link"]: a for a in all_new}
-    new_general = [by_link[a["link"]] for a in state["new_general"] if a["link"] in by_link]
-    new_policy = [by_link[a["link"]] for a in state["new_policy"] if a["link"] in by_link]
-    new_tweets = [by_link[a["link"]] for a in state["new_tweets"] if a["link"] in by_link]
-    new_labs = [by_link[a["link"]] for a in state["new_labs"] if a["link"] in by_link]
-
-    hot_general, normal_general = split_hot(new_general)
-    hot_policy, normal_policy = split_hot(new_policy)
-    hot_tweets, normal_tweets = split_hot(new_tweets)
-    hot_labs, normal_labs = split_hot(new_labs)
     return {
-        "new_general": new_general,
-        "new_policy": new_policy,
-        "new_tweets": new_tweets,
-        "new_labs": new_labs,
-        "hot_general": hot_general,
-        "hot_policy": hot_policy,
-        "hot_tweets": hot_tweets,
-        "hot_labs": hot_labs,
-        "normal_general": normal_general,
-        "normal_policy": normal_policy,
-        "normal_tweets": normal_tweets,
-        "normal_labs": normal_labs,
+        f"new_{cat}": [by_link[a["link"]] for a in state[f"new_{cat}"] if a["link"] in by_link]
+        for cat in _CATEGORIES
     }
+
+
+def node_verify(state: DigestState) -> DigestUpdate:
+    """LLM verification pass: merge same-story near-duplicates and drop junk.
+
+    Runs after prioritization so hotness (incl. the multi-outlet bonus) is
+    already known; the kept representative of each group keeps the pipeline's
+    hottest version of the story.
+    """
+    all_new = [a for cat in _CATEGORIES for a in state[f"new_{cat}"]]
+    kept = dedupe_news(all_new)
+    keep = {a["link"] for a in kept}
+    out: DigestUpdate = {}
+    for cat in _CATEGORIES:
+        cat_new = [a for a in state[f"new_{cat}"] if a["link"] in keep]
+        hot, normal = split_hot(cat_new)
+        out[f"new_{cat}"] = cat_new
+        out[f"hot_{cat}"] = hot
+        out[f"normal_{cat}"] = normal
+    return out
 
 
 def node_send_breaking(state: DigestState) -> DigestUpdate:
@@ -192,6 +197,7 @@ def build_graph():
     graph.add_node("fetch_labs", node_fetch_labs)
     graph.add_node("merge", node_merge)
     graph.add_node("prioritize", node_prioritize)
+    graph.add_node("verify", node_verify)
     graph.add_node("send_breaking", node_send_breaking)
     graph.add_node("summarize", node_summarize)
     graph.add_node("send_digest", node_send_digest)
@@ -205,7 +211,8 @@ def build_graph():
     graph.add_edge("fetch_tweets", "merge")
     graph.add_edge("fetch_labs", "merge")
     graph.add_conditional_edges("merge", route_after_merge, {"prioritize": "prioritize", END: END})
-    graph.add_edge("prioritize", "send_breaking")
+    graph.add_edge("prioritize", "verify")
+    graph.add_edge("verify", "send_breaking")
     graph.add_conditional_edges("send_breaking", route_after_breaking, {"summarize": "summarize", END: END})
     graph.add_edge("summarize", "send_digest")
     graph.add_edge("send_digest", END)

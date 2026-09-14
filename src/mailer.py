@@ -15,11 +15,16 @@ import smtplib
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from html import escape
 from typing import Dict, List, Tuple
 
 from src.config import GMAIL_ADDRESS, GMAIL_APP_PASSWORD, MAIL_TO
 
 _BASE_STYLE = "font-family:-apple-system,Helvetica,Arial,sans-serif;max-width:640px;margin:auto;color:#111;"
+
+
+def _h(text: str) -> str:
+    return escape(str(text or ""))
 
 
 def _truncate(text: str, limit: int = 220) -> str:
@@ -47,15 +52,27 @@ def _section_html(title: str, articles: List[Dict]) -> str:
     items = []
     for a in articles:
         snippet = _truncate(a.get("summary", ""))
-        snippet_html = f"<br><span style='font-size:13px;color:#333;'>{snippet}</span>" if snippet else ""
+        snippet_html = f"<br><span style='font-size:13px;color:#333;'>{_h(snippet)}</span>" if snippet else ""
         items.append(
             "<li style='margin-bottom:12px;'>"
-            f"<a href='{a['link']}' style='font-weight:600;text-decoration:none;color:#111;'>{a['title']}</a>"
-            f"<br><span style='color:#777;font-size:12px;'>{a['source']}</span>"
+            f"<a href='{a['link']}' style='font-weight:600;text-decoration:none;color:#111;'>{_h(a['title'])}</a>"
+            f"<br><span style='color:#777;font-size:12px;'>{_h(a['source'])}</span>"
             f"{snippet_html}"
             "</li>"
         )
-    return f"<h3 style='margin:24px 0 8px;'>{title}</h3><ul style='padding-left:18px;margin:0;'>{''.join(items)}</ul>"
+    return f"<h3 style='margin:24px 0 8px;'>{_h(title)}</h3><ul style='padding-left:18px;margin:0;'>{''.join(items)}</ul>"
+
+
+def _theme_chips(themes: List[str]) -> str:
+    if not themes:
+        return ""
+    chips = "".join(
+        f"<span style='display:inline-block;background:#e8f0fe;color:#1a56db;"
+        f"border-radius:10px;padding:2px 10px;font-size:12px;font-weight:600;"
+        f"margin:0 6px 6px 0;'>{_h(t)}</span>"
+        for t in themes
+    )
+    return f"<p style='margin:8px 0 4px;'>{chips}</p>"
 
 
 def _tags_html(tags: List[str]) -> str:
@@ -74,11 +91,11 @@ def build_breaking_email(articles: List[Dict]) -> Tuple[str, str]:
     items = []
     for a in articles:
         snippet = _truncate(a.get("summary", ""))
-        snippet_html = f"<br><span style='font-size:13px;color:#333;'>{snippet}</span>" if snippet else ""
+        snippet_html = f"<br><span style='font-size:13px;color:#333;'>{_h(snippet)}</span>" if snippet else ""
         items.append(
             "<li style='margin-bottom:14px;'>"
-            f"<a href='{a['link']}' style='font-weight:700;text-decoration:none;color:#b00020;'>{a['title']}</a>"
-            f"<br><span style='color:#777;font-size:12px;'>{a['source']}</span>"
+            f"<a href='{a['link']}' style='font-weight:700;text-decoration:none;color:#b00020;'>{_h(a['title'])}</a>"
+            f"<br><span style='color:#777;font-size:12px;'>{_h(a['source'])}</span>"
             f"{_tags_html(a.get('tags', []))}"
             f"{snippet_html}"
             "</li>"
@@ -97,14 +114,26 @@ def build_breaking_email(articles: List[Dict]) -> Tuple[str, str]:
     return html, "\n".join(text_lines)
 
 
-def build_email(overview: str, general: List[Dict], policy: List[Dict], tweets: List[Dict] = None, labs: List[Dict] = None) -> Tuple[str, str]:
+def build_email(overview, general: List[Dict], policy: List[Dict], tweets: List[Dict] = None, labs: List[Dict] = None) -> Tuple[str, str]:
+    """Render the digest. The template is FIXED -- the LLM only supplies the
+    three overview fields below, so the layout is identical whichever provider
+    wrote them (see providers.summarize_digest). A bare string is kept for
+    backwards compatibility."""
     tweets = tweets or []
     labs = labs or []
+    if isinstance(overview, str):
+        overview = {"headline": "", "summary": overview, "themes": []}
+    headline = overview.get("headline", "")
+    summary = overview.get("summary", "")
+    themes = overview.get("themes", [])
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    headline_html = f"<h3 style='margin:10px 0 2px;color:#1a1a1a;'>{_h(headline)}</h3>" if headline else ""
     html = (
         "<html><body style=\"" + _BASE_STYLE + "\">"
         f"<h2 style='margin-bottom:4px;'>AI News Digest &mdash; {now}</h2>"
-        f"<p style='color:#444;'>{overview}</p>"
+        f"{headline_html}"
+        f"<p style='color:#444;'>{_h(summary)}</p>"
+        f"{_theme_chips(themes)}"
         f"{_section_html('General AI News', general)}"
         f"{_section_html('AI Policy &amp; Political News', policy)}"
         f"{_section_html('AI Lab Updates', labs)}"
@@ -113,7 +142,14 @@ def build_email(overview: str, general: List[Dict], policy: List[Dict], tweets: 
         "Sent automatically by your AI news digest bot.</p>"
         "</body></html>"
     )
-    text_lines = [f"AI News Digest -- {now}", "", overview, ""]
+    text_lines = [f"AI News Digest -- {now}", ""]
+    if headline:
+        text_lines.append(headline)
+    text_lines += [summary, ""]
+    if themes:
+        text_lines.append("TOP THEMES")
+        text_lines += [f"- {t}" for t in themes]
+        text_lines.append("")
     if general:
         text_lines.append("GENERAL AI NEWS")
         text_lines += [f"- {a['title']} ({a['source']}) -- {a['link']}" for a in general]
