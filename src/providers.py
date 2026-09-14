@@ -14,9 +14,15 @@ from typing import Callable, Dict, List, Optional, Tuple
 from src.config import (
     ANTHROPIC_API_KEY,
     ANTHROPIC_MODEL,
+    CEREBRAS_API_KEY,
+    CEREBRAS_BASE_URL,
+    CEREBRAS_MODEL,
     GEMINI_API_KEY,
     GEMINI_BASE_URL,
     GEMINI_MODEL,
+    GROQ_API_KEY,
+    GROQ_BASE_URL,
+    GROQ_MODEL,
     HUGGINGFACE_API_KEY,
     HUGGINGFACE_BASE_URL,
     HUGGINGFACE_MODEL,
@@ -192,6 +198,26 @@ def _build_huggingface(model: Optional[str] = None) -> Optional[Provider]:
     )
 
 
+def _build_groq(model: Optional[str] = None) -> Optional[Provider]:
+    if not GROQ_API_KEY:
+        return None
+    model = model or GROQ_MODEL
+    return (
+        "groq",
+        lambda s, p: _call_openai_compatible(GROQ_BASE_URL, GROQ_API_KEY, model, s, p),
+    )
+
+
+def _build_cerebras(model: Optional[str] = None) -> Optional[Provider]:
+    if not CEREBRAS_API_KEY:
+        return None
+    model = model or CEREBRAS_MODEL
+    return (
+        "cerebras",
+        lambda s, p: _call_openai_compatible(CEREBRAS_BASE_URL, CEREBRAS_API_KEY, model, s, p),
+    )
+
+
 def _build_openai(model: Optional[str] = None) -> Optional[Provider]:
     if not OPENAI_API_KEY:
         return None
@@ -214,6 +240,8 @@ _BUILDERS: Dict[str, Callable[[Optional[str]], Optional[Provider]]] = {
     "opencode_zen": _build_opencode_zen,
     "gemini": _build_gemini,
     "huggingface": _build_huggingface,
+    "groq": _build_groq,
+    "cerebras": _build_cerebras,
     "openai": _build_openai,
     "anthropic": _build_anthropic,
 }

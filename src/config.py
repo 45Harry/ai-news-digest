@@ -14,7 +14,7 @@ from urllib.parse import quote
 # wins, so a provider that errors (bad key / quota / outage) is skipped and
 # the next one gets a chance. See providers.py for the registry.
 # ---------------------------------------------------------------------------
-DEFAULT_PROVIDER_CHAIN = "ollama,opencode_zen,gemini,huggingface,openai,anthropic"
+DEFAULT_PROVIDER_CHAIN = "anthropic,groq,cerebras,gemini,huggingface,openai,opencode_zen,ollama"
 LLM_PROVIDER = (os.getenv("LLM_PROVIDER") or "").strip().lower()  # optional single-provider override
 LLM_PROVIDERS = os.getenv("LLM_PROVIDERS", DEFAULT_PROVIDER_CHAIN)
 PROVIDER_CHAIN = [p.strip().lower() for p in LLM_PROVIDERS.split(",") if p.strip()]
@@ -50,13 +50,23 @@ OPENCODE_MODEL = os.getenv("OPENCODE_MODEL", "big-pickle")  # free tier model; s
 # Google Gemini, via its OpenAI-compatible endpoint.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_BASE_URL = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 
 # Hugging Face Inference Providers (OpenAI-compatible router).
 # Key may be given as HUGGINGFACE_API_KEY or the shorter HF_API_KEY.
 HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "") or os.getenv("HF_API_KEY", "")
 HUGGINGFACE_BASE_URL = os.getenv("HUGGINGFACE_BASE_URL", "https://router.huggingface.co/v1")
-HUGGINGFACE_MODEL = os.getenv("HUGGINGFACE_MODEL", "meta-llama/Llama-3.1-8B-Instruct")
+HUGGINGFACE_MODEL = os.getenv("HUGGINGFACE_MODEL", "meta-llama/Llama-3.3-70B-Instruct")
+
+# Groq (OpenAI-compatible endpoint) - key from https://console.groq.com/keys
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+
+# Cerebras (OpenAI-compatible endpoint) - key from https://cloud.cerebras.ai/
+CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "")
+CEREBRAS_BASE_URL = os.getenv("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1")
+CEREBRAS_MODEL = os.getenv("CEREBRAS_MODEL", "gpt-oss-120b")
 
 # OpenAI and Anthropic -- only used if their key is set and they are in the chain.
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
