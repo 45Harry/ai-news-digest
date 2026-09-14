@@ -28,6 +28,9 @@ from src.config import (
     HUGGINGFACE_MODEL,
     LLM_OVERVIEW_PROVIDERS,
     LLM_VERIFY_PROVIDERS,
+    NIM_API_KEY,
+    NIM_BASE_URL,
+    NIM_MODEL,
     OLLAMA_API_KEY,
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
@@ -218,6 +221,16 @@ def _build_cerebras(model: Optional[str] = None) -> Optional[Provider]:
     )
 
 
+def _build_nim(model: Optional[str] = None) -> Optional[Provider]:
+    if not NIM_API_KEY:
+        return None
+    model = model or NIM_MODEL
+    return (
+        "nim",
+        lambda s, p: _call_openai_compatible(NIM_BASE_URL, NIM_API_KEY, model, s, p),
+    )
+
+
 def _build_openai(model: Optional[str] = None) -> Optional[Provider]:
     if not OPENAI_API_KEY:
         return None
@@ -242,6 +255,7 @@ _BUILDERS: Dict[str, Callable[[Optional[str]], Optional[Provider]]] = {
     "huggingface": _build_huggingface,
     "groq": _build_groq,
     "cerebras": _build_cerebras,
+    "nim": _build_nim,
     "openai": _build_openai,
     "anthropic": _build_anthropic,
 }

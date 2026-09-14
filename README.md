@@ -36,11 +36,12 @@ The bot uses LLMs for two jobs: **verify** (dedup + junk removal + fact-checking
 |---|---|---|---|
 | 1st | Anthropic (Claude) | claude-sonnet-5 | Add `ANTHROPIC_API_KEY` to enable |
 | 2nd | Groq | openai/gpt-oss-120b | **Working** |
-| 3rd | Cerebras | gpt-oss-120b | Key valid, needs billing on account |
-| 4th | Google Gemini | gemini-3.8-flash | **Working** (quota: 20/day, resets daily) |
-| 5th | HuggingFace | Llama-3.3-70B-Instruct | Credits depleted |
-| 6th | OpenAI | gpt-4o-mini | Add `OPENAI_API_KEY` to enable |
-| 7th | OpenCode Zen | big-pickle | Console-only, not usable via API |
+| 3rd | NVIDIA NIM | deepseek-v4-flash | **Free**, no credit card — add `NIM_API_KEY` from build.nvidia.com |
+| 4th | Cerebras | gpt-oss-120b | Key valid, needs billing on account |
+| 5th | Google Gemini | gemini-3.8-flash | **Working** (quota: 20/day, resets daily) |
+| 6th | HuggingFace | Llama-3.3-70B-Instruct | Credits depleted |
+| 7th | OpenAI | gpt-4o-mini | Add `OPENAI_API_KEY` to enable |
+| 8th | OpenCode Zen | big-pickle | Console-only, not usable via API |
 | Last | Ollama (local) | llama3.1 | **Working** (free, private, no key needed) |
 
 Right now the bot uses **Groq** for both tasks (Gemini is quota-exhausted today, Ollama picks up if Groq also fails). When the Gemini quota resets tomorrow it'll be available again. When you add a Claude key it moves to first position.

@@ -14,7 +14,7 @@ from urllib.parse import quote
 # wins, so a provider that errors (bad key / quota / outage) is skipped and
 # the next one gets a chance. See providers.py for the registry.
 # ---------------------------------------------------------------------------
-DEFAULT_PROVIDER_CHAIN = "anthropic,groq,cerebras,gemini,huggingface,openai,opencode_zen,ollama"
+DEFAULT_PROVIDER_CHAIN = "anthropic,groq,nim,cerebras,gemini,huggingface,openai,opencode_zen,ollama"
 LLM_PROVIDER = (os.getenv("LLM_PROVIDER") or "").strip().lower()  # optional single-provider override
 LLM_PROVIDERS = os.getenv("LLM_PROVIDERS", DEFAULT_PROVIDER_CHAIN)
 PROVIDER_CHAIN = [p.strip().lower() for p in LLM_PROVIDERS.split(",") if p.strip()]
@@ -67,6 +67,11 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "")
 CEREBRAS_BASE_URL = os.getenv("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1")
 CEREBRAS_MODEL = os.getenv("CEREBRAS_MODEL", "gpt-oss-120b")
+
+# NVIDIA NIM (OpenAI-compatible endpoint) - free, no credit card, key from https://build.nvidia.com
+NIM_API_KEY = os.getenv("NIM_API_KEY", "")
+NIM_BASE_URL = os.getenv("NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
+NIM_MODEL = os.getenv("NIM_MODEL", "deepseek-ai/deepseek-v4-flash")
 
 # OpenAI and Anthropic -- only used if their key is set and they are in the chain.
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
