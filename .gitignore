@@ -1,0 +1,15 @@
+# Secrets -- never commit
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Runtime state
+data/seen.json
+logs/*.log
+
+# macOS
+.DS_Store
