@@ -79,6 +79,7 @@ RUN_INTERVAL_SECONDS = int(os.getenv("RUN_INTERVAL_SECONDS", "300"))  # how ofte
 MAX_ARTICLES_PER_RUN = int(os.getenv("MAX_ARTICLES_PER_RUN", "20"))  # cap per category, per run
 SEEN_TTL_DAYS = int(os.getenv("SEEN_TTL_DAYS", "14"))  # how long we remember a link to avoid re-sending it
 HOT_THRESHOLD = int(os.getenv("HOT_THRESHOLD", "65"))  # score above which a story is "big/unique" and alerts you
+FILTER_TODAY_ONLY = os.getenv("FILTER_TODAY_ONLY", "1") == "1"  # 1 = only emails articles published today
 REQUEST_TIMEOUT = 10  # seconds, per feed fetch
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

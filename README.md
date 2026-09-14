@@ -19,7 +19,9 @@ START ->                            >-> merge -> prioritize -> verify -> send_br
   and official lab blogs + announcement searches. See `src/config.py` for the
   lists.
 - **merge** de-dupes exact duplicates, drops anything already emailed before
-  (tracked in `data/seen.json`), and caps volume per run.
+  (tracked in `data/seen.json`), keeps the cap per category, and -- with
+  `FILTER_TODAY_ONLY=1` (default) -- only keeps articles **published today**.
+  Yesterday's news is never re-sent, so each run is a clean "what's new today".
 - **prioritize** flags **big / unique** stories (regulation, court cases, model
   launches, funding rounds, the same story covered by multiple outlets, ...).
 - **verify** (LLM) guards what gets mailed, twice:
@@ -148,7 +150,7 @@ First real run will likely email you everything currently in the feeds
 
 ## Running it on a schedule (real-time)
 
-**Option A -- long-running loop (recommended):**
+**Option A -- long-running loop (recommended for same-day breaking alerts):**
 
 ```bash
 mkdir -p logs
@@ -158,17 +160,23 @@ nohup .venv/bin/python run.py >> logs/run.log 2>&1 &
 Change how often it checks feeds with `RUN_INTERVAL_SECONDS` in `.env`
 (default 300 = every 5 minutes). Lower it for tighter "real-time" alerts.
 
-**Option B -- cron (if you prefer):**
+**Option B -- one daily "end of day" email (already configured on this machine):**
 
 ```bash
 crontab -e
 ```
 
-Add (adjust the path to your venv):
+The scheduled job points at 23:30 (your local time) and emails **only the
+stories published that day** (see `FILTER_TODAY_ONLY`), so you wake up to
+yesterday's full day of AI news in one digest:
 
 ```
-* * * * * cd /full/path/to/ai-news-digest && /full/path/to/.venv/bin/python run.py --once >> logs/run.log 2>&1
+30 23 * * * cd /full/path/to/ai-news-digest && /full/path/to/.venv/bin/python run.py --once >> logs/run.log 2>&1
 ```
+
+(Crontab entry takes effect immediately; check `logs/run.log` for each run's
+output. Duplicates are impossible across runs -- links already emailed are
+tracked in `data/seen.json` and never re-sent.)
 
 ## Customizing sources
 

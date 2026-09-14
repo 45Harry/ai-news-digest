@@ -26,12 +26,21 @@ from typing import Dict, List, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from src.config import MAX_ARTICLES_PER_RUN
+from src.config import FILTER_TODAY_ONLY, MAX_ARTICLES_PER_RUN
 from src.mailer import send_breaking_email, send_digest_email
 from src.priority import annotate, split_hot
 from src.providers import dedupe_news, summarize_digest
 from src.seen_store import SeenStore
 from src.sources import fetch_general_news, fetch_lab_news, fetch_policy_news, fetch_tweets
+
+import time
+from datetime import datetime
+
+
+def _today_cutoff() -> float:
+    if not FILTER_TODAY_ONLY:
+        return 0.0
+    return datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
 
 _CATEGORIES = ("general", "policy", "tweets", "labs")
 
@@ -76,23 +85,26 @@ def node_fetch_labs(state: DigestState) -> DigestUpdate:
     return {"raw_labs": fetch_lab_news()}
 
 
-def _dedupe_and_filter(articles: List[Dict], seen: SeenStore) -> List[Dict]:
+def _dedupe_and_filter(articles: List[Dict], seen: SeenStore, today_cutoff: float) -> List[Dict]:
     unique: Dict[str, Dict] = {}
     for a in articles:
         if a.get("link"):
             unique[a["link"]] = a
-    fresh = [a for a in unique.values() if not seen.has(a["link"])]
+    fresh = [
+        a
+        for a in unique.values()
+        if not seen.has(a["link"]) and a.get("published_ts", 0) >= today_cutoff
+    ]
     fresh.sort(key=lambda a: a.get("published_ts", 0), reverse=True)
     return fresh
 
 
 def node_merge(state: DigestState) -> DigestUpdate:
     seen = SeenStore()
+    today_cutoff = _today_cutoff()
     return {
-        "new_general": _dedupe_and_filter(state.get("raw_general", []), seen)[:MAX_ARTICLES_PER_RUN],
-        "new_policy": _dedupe_and_filter(state.get("raw_policy", []), seen)[:MAX_ARTICLES_PER_RUN],
-        "new_tweets": _dedupe_and_filter(state.get("raw_tweets", []), seen)[:MAX_ARTICLES_PER_RUN],
-        "new_labs": _dedupe_and_filter(state.get("raw_labs", []), seen)[:MAX_ARTICLES_PER_RUN],
+        f"new_{cat}": _dedupe_and_filter(state.get(f"raw_{cat}", []), seen, today_cutoff)[:MAX_ARTICLES_PER_RUN]
+        for cat in _CATEGORIES
     }
 
 
