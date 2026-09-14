@@ -64,6 +64,7 @@ class DigestState(TypedDict):
     normal_labs: List[Dict]
     overview: str
     sent: bool
+    breaking_only: bool
 
 
 DigestUpdate = Dict[str, object]
@@ -161,6 +162,8 @@ def node_send_breaking(state: DigestState) -> DigestUpdate:
 
 
 def route_after_breaking(state: DigestState) -> str:
+    if state.get("breaking_only"):
+        return END
     if (
         state.get("normal_general")
         or state.get("normal_policy")

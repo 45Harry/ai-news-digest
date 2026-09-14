@@ -10,7 +10,7 @@ from src.mailer import send_test_email  # noqa: E402
 from src.providers import check_providers  # noqa: E402
 
 
-def run_once() -> dict:
+def run_once(breaking_only: bool = False) -> dict:
     app = build_graph()
     initial_state = {
         "raw_general": [],
@@ -31,6 +31,7 @@ def run_once() -> dict:
         "normal_labs": [],
         "overview": "",
         "sent": False,
+        "breaking_only": breaking_only,
     }
     result = app.invoke(initial_state)
 

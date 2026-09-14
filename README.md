@@ -148,35 +148,36 @@ First real run will likely email you everything currently in the feeds
 (nothing's been marked "seen" yet). After that, each run only sends what's new
 -- instant BREAKING emails for big/unique stories, and a digest for the rest.
 
-## Running it on a schedule (real-time)
+## Running it on a schedule
 
-**Option A -- long-running loop (recommended for same-day breaking alerts):**
+The intended setup is **two jobs working together**:
 
-```bash
-mkdir -p logs
-nohup .venv/bin/python run.py >> logs/run.log 2>&1 &
-```
+1. **24/7 watcher (already running on this machine) -- real-time BREAKING alerts.**
+   A background process checks the feeds every `RUN_INTERVAL_SECONDS` (default
+   5 min) and emails **big/unique stories instantly** as they appear. It never
+   sends the regular digest -- that's the nightly job's job.
 
-Change how often it checks feeds with `RUN_INTERVAL_SECONDS` in `.env`
-(default 300 = every 5 minutes). Lower it for tighter "real-time" alerts.
+   ```bash
+   mkdir -p logs
+   nohup .venv/bin/python run.py >> logs/run.log 2>&1 &
+   ```
 
-**Option B -- one daily "end of day" email (already configured on this machine):**
+   It survives reboots via `@reboot` in `crontab -e`. Hot stories already
+   alerted are recorded in `data/seen.json`, so the nightly digest never
+   repeats them.
 
-```bash
-crontab -e
-```
+2. **Nightly digest (cron, 23:30 local / Asia-Kathmandu) -- one email a night.**
+   `run.py --once` sends everything published **that day** that you haven't
+   already received as a BREAKING alert, in a single email:
 
-The scheduled job points at 23:30 (your local time) and emails **only the
-stories published that day** (see `FILTER_TODAY_ONLY`), so you wake up to
-yesterday's full day of AI news in one digest:
+   ```
+   30 23 * * * cd /full/path/to/ai-news-digest && /full/path/to/.venv/bin/python run.py --once >> logs/run.log 2>&1
+   ```
 
-```
-30 23 * * * cd /full/path/to/ai-news-digest && /full/path/to/.venv/bin/python run.py --once >> logs/run.log 2>&1
-```
-
-(Crontab entry takes effect immediately; check `logs/run.log` for each run's
-output. Duplicates are impossible across runs -- links already emailed are
-tracked in `data/seen.json` and never re-sent.)
+   So: big news hits your inbox the moment it happens, and every evening at
+   11:30pm you get one tidy digest of the rest of that day's AI news.
+   Duplicates are impossible -- anything already emailed is never re-sent
+   (see `FILTER_TODAY_ONLY` + `data/seen.json`).
 
 ## Customizing sources
 
