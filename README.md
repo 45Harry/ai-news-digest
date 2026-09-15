@@ -84,23 +84,29 @@ cp .env.example .env       # then fill in your keys
 
 ---
 
-## Running it 24/7
+## Running it on a schedule
 
-Two things run at the same time:
+**One daily email at 9:10 AM** (cron, Asia/Kathmandu local time). It covers the
+previous day's news plus today's so far (`FILTER_TODAY_ONLY=1` +
+`RECENCY_DAYS=1`). No real-time BREAKING alerts (`BREAKING_ALERTS=0`) — big
+stories are simply included in the single morning digest, so you get one tidy
+email each day, no duplicates, nothing re-sent.
 
-**1. Real-time watcher (runs in background, checks every 5 minutes)**
-Emails big stories the moment they appear. Survives reboots via `@reboot` in crontab.
+Install the cron job:
 
 ```bash
-nohup .venv/bin/python run.py >> logs/run.log 2>&1 &
+crontab -e
 ```
 
-**2. Nightly digest (cron at 11:30 PM)**
-One email with everything else published that day.
+```
+10 9 * * * cd /full/path/to/ai-news-digest && /full/path/to/.venv/bin/python run.py --once >> logs/run.log 2>&1
+```
 
-```
-30 23 * * * cd /path/to/ai-news-digest && /path/to/.venv/bin/python run.py --once >> logs/run.log 2>&1
-```
+Run it right now: `.venv/bin/python run.py --once`
+
+Want real-time alerts again? Set `BREAKING_ALERTS=1` in `.env` and start the
+24/7 watcher (`nohup .venv/bin/python run.py >> logs/run.log 2>&1 &`), and it
+will email big stories the moment they appear, on top of the daily digest.
 
 ---
 

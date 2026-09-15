@@ -26,7 +26,7 @@ from typing import Dict, List, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from src.config import FILTER_TODAY_ONLY, MAX_ARTICLES_PER_RUN
+from src.config import BREAKING_ALERTS, FILTER_TODAY_ONLY, MAX_ARTICLES_PER_RUN, RECENCY_DAYS
 from src.mailer import send_breaking_email, send_digest_email
 from src.priority import annotate, split_hot
 from src.providers import dedupe_news, summarize_digest
@@ -34,13 +34,14 @@ from src.seen_store import SeenStore
 from src.sources import fetch_general_news, fetch_lab_news, fetch_policy_news, fetch_tweets
 
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 def _today_cutoff() -> float:
     if not FILTER_TODAY_ONLY:
         return 0.0
-    return datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+    today_midnight = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    return (today_midnight - timedelta(days=RECENCY_DAYS)).timestamp()
 
 _CATEGORIES = ("general", "policy", "tweets", "labs")
 
@@ -147,17 +148,30 @@ def node_verify(state: DigestState) -> DigestUpdate:
 
 
 def node_send_breaking(state: DigestState) -> DigestUpdate:
+    """Email big/unique stories immediately (if BREAKING_ALERTS=1).
+
+    With BREAKING_ALERTS off (default), hot stories are NOT emailed right away
+    and NOT marked seen -- they stay in the pool and are included in the next
+    regular digest instead.
+    """
     hot = (
         state.get("hot_general", [])
         + state.get("hot_policy", [])
         + state.get("hot_tweets", [])
         + state.get("hot_labs", [])
     )
-    if hot:
+    if not hot:
+        return {}
+    if BREAKING_ALERTS:
         send_breaking_email(hot)
         SeenStore().mark_seen([a["link"] for a in hot])
         print(f"[graph] BREAKING alert sent: {len(hot)} big/unique story(ies)")
-        return {"sent": True}
+    else:
+        out: DigestUpdate = {}
+        for cat in _CATEGORIES:
+            out[f"normal_{cat}"] = state.get(f"normal_{cat}", []) + state.get(f"hot_{cat}", [])
+        print(f"[graph] BREAKING alerts off: {len(hot)} big story(ies) folded into digest")
+        return out
     return {}
 
 

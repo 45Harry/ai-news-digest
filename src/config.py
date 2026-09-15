@@ -71,7 +71,7 @@ CEREBRAS_MODEL = os.getenv("CEREBRAS_MODEL", "gpt-oss-120b")
 # NVIDIA NIM (OpenAI-compatible endpoint) - free, no credit card, key from https://build.nvidia.com
 NIM_API_KEY = os.getenv("NIM_API_KEY", "")
 NIM_BASE_URL = os.getenv("NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
-NIM_MODEL = os.getenv("NIM_MODEL", "deepseek-ai/deepseek-v4-flash")
+NIM_MODEL = os.getenv("NIM_MODEL", "moonshotai/kimi-k3")
 
 # OpenAI and Anthropic -- only used if their key is set and they are in the chain.
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -95,6 +95,10 @@ MAX_ARTICLES_PER_RUN = int(os.getenv("MAX_ARTICLES_PER_RUN", "20"))  # cap per c
 SEEN_TTL_DAYS = int(os.getenv("SEEN_TTL_DAYS", "14"))  # how long we remember a link to avoid re-sending it
 HOT_THRESHOLD = int(os.getenv("HOT_THRESHOLD", "65"))  # score above which a story is "big/unique" and alerts you
 FILTER_TODAY_ONLY = os.getenv("FILTER_TODAY_ONLY", "1") == "1"  # 1 = only emails articles published today
+RECENCY_DAYS = int(os.getenv("RECENCY_DAYS", "1"))  # how many previous days (plus today) are included
+# 1 = instant real-time BREAKING emails as big stories appear (needs the 24/7
+# loop); 0 = no separate breaking alerts, big stories just go in the digest.
+BREAKING_ALERTS = os.getenv("BREAKING_ALERTS", "0") == "1"
 REQUEST_TIMEOUT = 10  # seconds, per feed fetch
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

@@ -20,16 +20,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from src.config import RUN_INTERVAL_SECONDS  # noqa: E402  (after dotenv)
+from src.config import BREAKING_ALERTS, RUN_INTERVAL_SECONDS  # noqa: E402  (after dotenv)
 from src.main import check_llm, run_once, send_test_email  # noqa: E402
 
 
 def _scheduler(interval: int) -> None:
     print(f"[scheduler] starting; checking feeds every {interval}s (Ctrl+C to stop)")
-    print("[scheduler] BREAKING mode: big/unique stories emailed instantly; the 11:30pm cron sends the daily digest.")
+    print("[scheduler] BREAKING alerts are off (BREAKING_ALERTS=0); big stories are kept for the daily digest (09:10 cron).")
     while True:
         try:
-            run_once(breaking_only=True)
+            run_once(breaking_only=BREAKING_ALERTS)
         except Exception:  # noqa: BLE001 -- keep the loop alive across bad runs
             traceback.print_exc()
         time.sleep(interval)
