@@ -28,6 +28,7 @@ from src.config import (
     HUGGINGFACE_MODEL,
     LLM_OVERVIEW_PROVIDERS,
     LLM_VERIFY_PROVIDERS,
+    MODEL_FOCUS,
     NIM_API_KEY,
     NIM_BASE_URL,
     NIM_MODEL,
@@ -74,15 +75,34 @@ OVERVIEW_SYSTEM_PROMPT = (
 
 # Verification step (same provider chain). Fixes cross-feed duplication: the same
 # story covered by several outlets is kept once, and outright junk is dropped.
+# With MODEL_FOCUS=1 the editor also enforces a "new AI tech only" focus, so
+# generic AI opinion/listicle/business-chatter items are dropped and the digest
+# stays about actual new models, research, and product launches.
 VERIFY_SYSTEM_PROMPT = (
     "You are a news verification editor. You are given a numbered batch of "
     "AI-news items, each line as: <index>: [<category>] <headline> (<source>) <snippet>\n"
     "Your jobs:\n"
     "1) GROUPINGS: indices that describe the SAME underlying story (including "
     "near-duplicates, e.g. rewrites or re-syndication) belong together.\n"
-    "2) DROP: any item that is junk, off-topic, machine-generated spam, "
-    "empty/placeholder, or not a real news item.\n"
-    "Respond with ONLY raw JSON (no markdown fences, no prose) in EXACTLY "
+    '2) DROP: any item that is junk, off-topic, machine-generated spam, '
+    'empty/placeholder, or not a real news item.\n'
+)
+
+if MODEL_FOCUS:
+    VERIFY_SYSTEM_PROMPT += (
+        '3) FOCUS: keep the digest sharply focused on NEW AI TECHNOLOGY. '
+        "KEEP items about: new model releases/launches (any lab or company), new "
+        "AI research, new AI products/tools/features, AI hardware/chips, "
+        "benchmark results, major lab announcements, API releases. DROP items "
+        "that are NOT about concrete new AI tech: generic AI opinion pieces, "
+        "editorials, 'How AI will change X' listicles, AI adoption surveys, "
+        "job-market/HR articles, minor company business moves, 'AI stocks' "
+        "market commentary, and newsletter-puffery. When in doubt, DROP -- a "
+        "focused digest beats a noisy one.\n"
+    )
+
+VERIFY_SYSTEM_PROMPT += (
+    'Respond with ONLY raw JSON (no markdown fences, no prose) in EXACTLY '
     "this schema, listing indices as integer arrays:\n"
     '{"groups":[[0,3],[1]],"drop":[5]}\n'
     '"groups" is a list of index arrays, each array = one unique story; '
@@ -141,7 +161,9 @@ def _call_openai_compatible(
             {"role": "system", "content": system},
             {"role": "user", "content": user_prompt},
         ],
-        max_tokens=1200,
+        # Generous budget so reasoning models (e.g. gpt-oss) don't spend the
+        # whole allowance on hidden reasoning and return empty content.
+        max_tokens=4096,
         temperature=0.3,
     )
     return (resp.choices[0].message.content or "").strip()
@@ -327,8 +349,35 @@ def _run_chain(system: str, user_prompt: str, chain: List[str] = None) -> Tuple[
             text = call(system, user_prompt)
             if text:
                 return text, name
+            print(f"[llm] provider '{name}' returned empty -- trying next")
         except Exception as exc:  # noqa: BLE001 -- failing provider should never block the email
             print(f"[llm] provider '{name}' failed: {exc} -- trying next")
+    return None, None
+
+
+def _run_chain_json(system: str, user_prompt: str, chain: List[str] = None) -> Tuple[Optional[dict], Optional[str]]:
+    """Like _run_chain, but keeps trying until a provider returns parseable JSON.
+
+    A provider that answers with empty text or non-JSON (common with small or
+    reasoning models) is skipped so the next, more reliable provider is used.
+    """
+    providers = available_providers(chain)
+    if not providers:
+        print("[llm] no LLM provider is configured/available in this task's chain -- using default")
+    for name, call in providers:
+        try:
+            text = call(system, user_prompt)
+        except Exception as exc:  # noqa: BLE001 -- failing provider should never block the email
+            print(f"[llm] provider '{name}' failed: {exc} -- trying next")
+            continue
+        if not text:
+            print(f"[llm] provider '{name}' returned empty -- trying next")
+            continue
+        try:
+            return _extract_json(text), name
+        except Exception as exc:  # noqa: BLE001
+            print(f"[llm] provider '{name}' returned non-JSON ({exc}) -- trying next")
+            continue
     return None, None
 
 
@@ -352,14 +401,9 @@ def dedupe_news(articles: List[Dict]) -> List[Dict]:
         + "\n".join(lines)
         + "\n\nReturn the verification JSON now."
     )
-    text, name = _run_chain(VERIFY_SYSTEM_PROMPT, user_prompt, chain=LLM_VERIFY_PROVIDERS)
-    if not text:
-        print("[llm] verification passed through unchanged (no provider answer)")
-        return articles
-    try:
-        verdict = _extract_json(text)
-    except Exception as exc:
-        print(f"[llm] verification JSON parse failed ({name}): {exc} -- keeping all items")
+    verdict, name = _run_chain_json(VERIFY_SYSTEM_PROMPT, user_prompt, chain=LLM_VERIFY_PROVIDERS)
+    if not verdict:
+        print("[llm] verification passed through unchanged (no provider gave usable JSON)")
         return articles
 
     def _ints(value) -> List[int]:
@@ -389,10 +433,15 @@ def dedupe_news(articles: List[Dict]) -> List[Dict]:
 
     kept = [a for i, a in enumerate(articles) if i in keep]
     removed = len(articles) - len(kept)
-    if removed > len(articles) * 0.5:
+    # The over-merge guard stops a weak local model that merges almost
+    # everything into one story. When MODEL_FOCUS=1, aggressive DROPPING is
+    # expected (most general AI news is off-focus), so only complain if the
+    # model kept almost nothing at all (likely a bad answer).
+    guard_ratio = 0.9 if MODEL_FOCUS else 0.5
+    if removed > len(articles) * guard_ratio:
         print(
             f"[llm] verification by {name} removed {removed}/{len(articles)} item(s) -- "
-            "suspicious over-merge, keeping all items unchanged"
+            "nearly everything, suspicious model answer, keeping all items unchanged"
         )
         return articles
     print(f"[llm] verified by {name}: kept {len(kept)}/{len(articles)} item(s) (removed {removed} dup/junk)")
@@ -468,17 +517,13 @@ def verify_overview(overview: Dict, source_lines: List[str]) -> List[str]:
         f"top themes: {', '.join(overview.get('themes', []))}\n\n"
         "Return the fact-check JSON now."
     )
-    text, name = _run_chain(VERIFY_OVERVIEW_SYSTEM_PROMPT, user, chain=LLM_VERIFY_PROVIDERS)
-    if not text:
+    verdict, name = _run_chain_json(VERIFY_OVERVIEW_SYSTEM_PROMPT, user, chain=LLM_VERIFY_PROVIDERS)
+    if not verdict:
         return []
-    try:
-        verdict = _extract_json(text)
-        if not verdict.get("ok", True):
-            issues = [str(i).strip() for i in (verdict.get("issues") or []) if str(i).strip()]
-            print(f"[llm] overview flagged by verifier ({name}): {'; '.join(issues) or 'unspecified issues'}")
-            return issues
-    except Exception as exc:
-        print(f"[llm] overview fact-check reply unparsable ({name}): {exc} -- accepting")
+    if not verdict.get("ok", True):
+        issues = [str(i).strip() for i in (verdict.get("issues") or []) if str(i).strip()]
+        print(f"[llm] overview flagged by verifier ({name}): {'; '.join(issues) or 'unspecified issues'}")
+        return issues
     return []
 
 

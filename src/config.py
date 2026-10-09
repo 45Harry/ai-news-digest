@@ -96,6 +96,11 @@ SEEN_TTL_DAYS = int(os.getenv("SEEN_TTL_DAYS", "14"))  # how long we remember a 
 HOT_THRESHOLD = int(os.getenv("HOT_THRESHOLD", "65"))  # score above which a story is "big/unique" and alerts you
 FILTER_TODAY_ONLY = os.getenv("FILTER_TODAY_ONLY", "1") == "1"  # 1 = only emails articles published today
 RECENCY_DAYS = int(os.getenv("RECENCY_DAYS", "1"))  # how many previous days (plus today) are included
+# 1 (default) = keep the digest focused on NEW AI TECH: model releases, launches,
+# research, products, tools, chips, and major lab news. Random "AI" news
+# (opinion, listicles, generic how-to, minor business chatter) is dropped by
+# the verify step. 0 = keep everything in the feeds.
+MODEL_FOCUS = os.getenv("MODEL_FOCUS", "1") == "1"
 # 1 = instant real-time BREAKING emails as big stories appear (needs the 24/7
 # loop); 0 = no separate breaking alerts, big stories just go in the digest.
 BREAKING_ALERTS = os.getenv("BREAKING_ALERTS", "0") == "1"
@@ -137,7 +142,8 @@ POLICY_AI_FEEDS = [_google_news_rss(q) for q in POLICY_QUERIES]
 # AI Lab Updates -- official lab blogs plus announcement searches.
 # The most reliable substitute for (and complement to) the labs' tweets; the
 # Google-News queries cover labs with no public RSS (Anthropic, DeepSeek, xAI,
-# Qwen, Zhipu, Moonshot, ...).
+# Qwen, Zhipu, Moonshot, ...). These are the feeds that catch new MODEL
+# releases -- keep them broad.
 # ---------------------------------------------------------------------------
 LAB_AI_FEEDS = [
     "https://openai.com/news/rss.xml",
@@ -154,6 +160,15 @@ LAB_ANNOUNCE_QUERIES = [
     '"Moonshot AI" Kimi',
     '"xAI" Grok update',
     '"Zhipu AI" GLM',
+    '"Mistral" new model',
+    '"MiniMax" model release',
+    '"Cohere" model release',
+    '"NVIDIA" new AI model announcement',
+    '"new AI model" release launch',
+    '"open-source" AI model released',
+    '"open source" language model released',
+    '"AI model" unveils benchmark',
+    '"AI" model launch announcement',
 ]
 LAB_ANNOUNCE_FEEDS = [_google_news_rss(q) for q in LAB_ANNOUNCE_QUERIES]
 LAB_AI_FEEDS += LAB_ANNOUNCE_FEEDS

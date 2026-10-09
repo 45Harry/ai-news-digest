@@ -1,30 +1,34 @@
 # AI News Digest
 
-Checks AI news sources on a schedule and emails you two things:
-
-1. **Real-time BREAKING alerts** the moment a big story appears.
-2. **One nightly digest** at 11:30 PM with everything else published that day.
-
-No duplicates, no spam, no empty emails. Stories you already got as breaking alerts are never repeated in the digest.
+Checks AI news sources on a schedule and emails you **one daily digest at 9:10 AM**
+focused on **new AI technology** — model releases, launches, research, products,
+tools, chips, and big lab news. It covers yesterday plus today, drops anything
+you've already seen, and never sends duplicates or empty emails.
 
 ---
 
 ## How it works (simple version)
 
-Every few minutes, the bot:
-- Pulls stories from AI news sites (TechCrunch, The Verge, OpenAI blog, Google News for policy/regulation stories, etc.)
-- Drops anything you've already seen
-- Flags big/unique stories (court cases, new models, regulation, funding) and emails them to you **instantly**
-- At 11:30 PM, sends one tidy recap of the rest of the day's news
+Each day the bot:
+- Pulls from AI lab blogs (OpenAI, Google, DeepMind, Mistral, Meta, HuggingFace)
+  plus Google News searches that catch new model launches across the industry
+  (Anthropic, DeepSeek, Qwen, Kimi, Grok, GLM, MiniMax, Cohere, NVIDIA, and
+  general "new AI model" releases)
+- Drops anything you've already seen and anything older than the window
+- Uses an LLM to keep **only new AI tech**: it drops opinion pieces, listicles,
+  "AI will change everything" fluff, adoption surveys, funding/valuation chatter
+  and stock commentary
+- Writes a short "what's notable today" summary and emails it
 
 Before anything gets emailed, an LLM checks it:
 - Merges duplicate coverage of the same story (only the best version survives)
 - Drops junk or off-topic items
-- Writes a short "what's notable today" summary
 - Fact-checks the summary against the real headlines (no made-up facts)
 - Makes sure no HTML/code/markdown leaks into the email
 
 If the LLM says something looks wrong, it regenerates up to 3 times. If all attempts fail, a clean default summary goes out instead.
+
+Set `MODEL_FOCUS=0` in `.env` to turn off the new-tech filter and keep everything.
 
 ---
 
@@ -116,7 +120,8 @@ Edit `src/config.py` to change what gets watched:
 
 - `GENERAL_AI_FEEDS` — direct RSS feeds (TechCrunch, VentureBeat, The Verge, GitHub)
 - `POLICY_QUERIES` — Google News searches for policy/regulation/politics stories
-- `LAB_AI_FEEDS` / `LAB_ANNOUNCE_QUERIES` — AI lab blogs + announcement searches
+- `LAB_AI_FEEDS` / `LAB_ANNOUNCE_QUERIES` — AI lab blogs + the model-launch
+  searches (this is the section that catches new model releases)
 - `AI_TWITTER_ACCOUNTS` — official lab X/Twitter accounts (needs a working RSSHub instance)
 
 ---
@@ -146,7 +151,10 @@ ai-news-digest/
 
 ## Tuning
 
-- `HOT_THRESHOLD` (default 65) — how "big" a story has to be before it triggers a real-time alert. Higher = fewer alerts.
+- `MODEL_FOCUS` (default 1) — keep only new AI tech (models/launches/research/products). Set to 0 to keep all feed items.
+- `RECENCY_DAYS` (default 1) — how far back the digest reaches. 1 = yesterday + today.
+- `FILTER_TODAY_ONLY` (default 1) — only emails articles within the recency window. Set to 0 to email anything in the feeds.
+- `BREAKING_ALERTS` (default 0) — 1 = also email big stories instantly (needs the 24/7 watcher running).
+- `HOT_THRESHOLD` (default 65) — how "big" a story must be to count as breaking when alerts are on.
 - `MAX_ARTICLES_PER_RUN` (default 20) — cap per category per email. Lower if emails feel long.
-- `FILTER_TODAY_ONLY` (default 1) — only emails articles published today. Set to 0 to email anything in the feeds.
 - `RUN_INTERVAL_SECONDS` (default 300) — how often the watcher checks for new stories.
